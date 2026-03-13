@@ -30,6 +30,7 @@ Adapter foundation with upstream login-state preserved, plus a first Rigel-facin
 - `POST /api/v1/search` for used-market sample collection
 - `POST /api/v1/market/summary` for immediate price aggregation over current samples
 - optional PostgreSQL persistence into `products`, `price_snapshots`, and `jobs`
+- conservative invalid-title filtering for obvious wanted posts, whole-PC listings, broken parts, and CPU/MB bundles
 
 ## Routes
 
@@ -93,6 +94,5 @@ curl -X POST http://localhost:18085/api/v1/market/summary \
 ## TODO / MOCK
 
 - TODO: persist canonical mappings after `rigel-build-engine` normalizes titles into canonical part keys
-- TODO: add PC-part-specific invalid-title filtering
 - TODO: write daily aggregated canonical summaries into `part_market_summary` after canonical mapping is available
 - TODO: verify real Goofish search against a valid login-state file in this narrowed adapter flow

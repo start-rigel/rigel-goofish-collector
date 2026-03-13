@@ -10,6 +10,7 @@ from playwright.async_api import async_playwright
 
 from app.config import Config
 from app.services.login_state_service import LoginStateService
+from app.services.part_filter_service import reject_reason
 
 API_URL_PATTERN = "h5api.m.goofish.com/h5/mtop.taobao.idlemtopsearch.pc.search"
 RISK_SELECTORS = ["div.baxia-dialog-mask", "div.J_MIDDLEWARE_FRAME_WIDGET"]
@@ -120,6 +121,9 @@ class SearchService:
         click_args = ((((item.get("main") or {}).get("clickParam") or {}).get("args")) or {})
         title = str(main.get("title") or "").strip()
         if not title:
+            return None
+        reject = reject_reason(title, category)
+        if reject is not None:
             return None
         price = self._parse_price(main.get("price"))
         if price is None:
