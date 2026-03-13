@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from app.config import Config, load_config
 from app.services.login_state_service import LoginStateService
+from app.services.persistence_service import PersistenceService
 from app.services.search_service import LoginRequiredError, RiskControlError, SearchService
 from app.services.summary_service import summarize_prices
 
@@ -30,6 +31,7 @@ class SearchRequest(BaseModel):
     limit: int = 10
     strategy: Optional[str] = None
     account_state_file: Optional[str] = None
+    persist: bool = False
 
 
 class MarketSummaryRequest(BaseModel):
@@ -38,12 +40,18 @@ class MarketSummaryRequest(BaseModel):
     limit: int = 10
     strategy: Optional[str] = None
     account_state_file: Optional[str] = None
+    persist: bool = False
 
 
-def create_app(cfg: Optional[Config] = None, search_service: Optional[SearchService] = None) -> FastAPI:
+def create_app(
+    cfg: Optional[Config] = None,
+    search_service: Optional[SearchService] = None,
+    persistence_service: Optional[PersistenceService] = None,
+) -> FastAPI:
     config = cfg or load_config()
     state_service = LoginStateService(config.state_dir, config.root_state_file)
     collector_service = search_service or SearchService(config, state_service)
+    storage_service = persistence_service or (PersistenceService(config.postgres_dsn) if config.postgres_dsn else None)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -59,6 +67,7 @@ def create_app(cfg: Optional[Config] = None, search_service: Optional[SearchServ
             "service": config.service_name,
             "mode": config.mode,
             "upstream_enabled": config.upstream_enabled,
+            "persistence_enabled": storage_service is not None,
         }
 
     @app.get("/")
@@ -78,7 +87,7 @@ def create_app(cfg: Optional[Config] = None, search_service: Optional[SearchServ
             ],
             "todo": [
                 "refine part-title filtering for Goofish used-market data",
-                "persist daily used-market samples and aggregated summaries",
+                "persist canonical mappings after build-engine normalization is ready",
             ],
         }
 
@@ -112,7 +121,9 @@ def create_app(cfg: Optional[Config] = None, search_service: Optional[SearchServ
     @app.post("/api/v1/search")
     async def search(req: SearchRequest) -> dict:
         try:
-            return await collector_service.search(req.keyword, req.category, req.limit, req.strategy, req.account_state_file)
+            result = await collector_service.search(req.keyword, req.category, req.limit, req.strategy, req.account_state_file)
+            persist_result = _persist_if_requested(storage_service, req.persist, result, None)
+            return _merge_persist_result(result, req.persist, persist_result)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except LoginRequiredError as exc:
@@ -126,6 +137,17 @@ def create_app(cfg: Optional[Config] = None, search_service: Optional[SearchServ
     async def market_summary(req: MarketSummaryRequest) -> dict:
         try:
             search_result = await collector_service.search(req.keyword, req.category, req.limit, req.strategy, req.account_state_file)
+            summary = summarize_prices(req.keyword, req.category, search_result.get("products", []))
+            persist_result = _persist_if_requested(storage_service, req.persist, search_result, summary)
+            response = {
+                "keyword": req.keyword,
+                "category": req.category,
+                "state_file": search_result.get("state_file"),
+                "products": search_result.get("products", []),
+                "summary": summary,
+            }
+            response.update(_persist_metadata(req.persist, persist_result))
+            return response
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except LoginRequiredError as exc:
@@ -135,16 +157,28 @@ def create_app(cfg: Optional[Config] = None, search_service: Optional[SearchServ
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-        summary = summarize_prices(req.keyword, req.category, search_result.get("products", []))
-        return {
-            "keyword": req.keyword,
-            "category": req.category,
-            "state_file": search_result.get("state_file"),
-            "products": search_result.get("products", []),
-            "summary": summary,
-        }
-
     return app
+
+
+def _persist_if_requested(storage_service: Optional[PersistenceService], persist: bool, result: dict, summary: Optional[dict]):
+    if not persist:
+        return None
+    if storage_service is None:
+        raise ValueError("persistence requested but postgres dsn is not configured")
+    return storage_service.persist_search_result(result, summary)
+
+
+def _persist_metadata(persist: bool, persist_result) -> dict:
+    payload = {"persisted": False, "persisted_count": 0}
+    if persist and persist_result is not None:
+        payload.update({"persisted": True, "persisted_count": persist_result.persisted_count, "job_id": persist_result.job_id})
+    return payload
+
+
+def _merge_persist_result(result: dict, persist: bool, persist_result) -> dict:
+    payload = dict(result)
+    payload.update(_persist_metadata(persist, persist_result))
+    return payload
 
 
 def run() -> None:

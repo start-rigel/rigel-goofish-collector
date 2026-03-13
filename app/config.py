@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,7 @@ class Config:
     run_headless: bool
     search_timeout_ms: int
     browser_channel: str
+    postgres_dsn: Optional[str]
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -33,6 +35,7 @@ def load_config() -> Config:
             str(state_dir / "goofish_state.json"),
         )
     )
+    postgres_dsn = os.getenv("RIGEL_POSTGRES_DSN", "").strip() or None
     return Config(
         service_name=os.getenv("RIGEL_SERVICE_NAME", "rigel-goofish-collector"),
         http_port=int(os.getenv("RIGEL_HTTP_PORT", os.getenv("RIGEL_GOOFISH_COLLECTOR_PORT", "8080"))),
@@ -43,4 +46,5 @@ def load_config() -> Config:
         run_headless=_bool_env("RIGEL_GOOFISH_HEADLESS", True),
         search_timeout_ms=int(os.getenv("RIGEL_GOOFISH_SEARCH_TIMEOUT_MS", "45000")),
         browser_channel=os.getenv("RIGEL_GOOFISH_BROWSER_CHANNEL", "chromium"),
+        postgres_dsn=postgres_dsn,
     )

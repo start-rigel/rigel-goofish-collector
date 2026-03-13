@@ -4,3 +4,4 @@ aiofiles
 playwright
 python-dotenv
 httpx
+psycopg[binary]

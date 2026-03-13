@@ -13,6 +13,7 @@ class ConfigTest(unittest.TestCase):
         os.environ.pop("RIGEL_GOOFISH_ROOT_STATE_FILE", None)
         os.environ.pop("RIGEL_GOOFISH_HEADLESS", None)
         os.environ.pop("RIGEL_GOOFISH_SEARCH_TIMEOUT_MS", None)
+        os.environ.pop("RIGEL_POSTGRES_DSN", None)
         cfg = load_config()
         self.assertEqual(cfg.service_name, "rigel-goofish-collector")
         self.assertEqual(cfg.http_port, 8080)
@@ -21,6 +22,7 @@ class ConfigTest(unittest.TestCase):
         self.assertTrue(cfg.run_headless)
         self.assertEqual(cfg.search_timeout_ms, 45000)
         self.assertEqual(cfg.browser_channel, "chromium")
+        self.assertIsNone(cfg.postgres_dsn)
 
 
 if __name__ == "__main__":

@@ -27,6 +27,7 @@ Adapter foundation with upstream login-state preserved, plus a first Rigel-facin
 - runtime account-selection plan API based on upstream rotation logic
 - `POST /api/v1/search` for used-market sample collection
 - `POST /api/v1/market/summary` for immediate price aggregation over current samples
+- optional PostgreSQL persistence into `products`, `price_snapshots`, and `jobs`
 
 ## Routes
 
@@ -56,6 +57,7 @@ python3 main.py
 - `RIGEL_GOOFISH_HEADLESS=true`
 - `RIGEL_GOOFISH_SEARCH_TIMEOUT_MS=45000`
 - `RIGEL_GOOFISH_BROWSER_CHANNEL=chromium`
+- `RIGEL_POSTGRES_DSN=...` enables persistence
 
 ## Example Requests
 
@@ -66,6 +68,12 @@ curl -X POST http://localhost:18085/api/v1/search \
 ```
 
 ```bash
+curl -X POST http://localhost:18085/api/v1/search \
+  -H 'Content-Type: application/json' \
+  -d '{"keyword":"DDR5 6000 32G","category":"RAM","limit":10,"persist":true}'
+```
+
+```bash
 curl -X POST http://localhost:18085/api/v1/market/summary \
   -H 'Content-Type: application/json' \
   -d '{"keyword":"DDR5 6000 32G","category":"RAM","limit":10}'
@@ -73,7 +81,7 @@ curl -X POST http://localhost:18085/api/v1/market/summary \
 
 ## TODO / MOCK
 
-- TODO: persist Goofish raw samples into PostgreSQL instead of returning only request-scoped results
+- TODO: persist canonical mappings after `rigel-build-engine` normalizes titles into canonical part keys
 - TODO: add PC-part-specific invalid-title filtering
-- TODO: map titles into canonical part keys before writing daily summaries
+- TODO: write daily aggregated canonical summaries into `part_market_summary` after canonical mapping is available
 - TODO: verify real Goofish search against a valid login-state file in this narrowed adapter flow
