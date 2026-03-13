@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import random
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from vendor.ai_goofish_monitor.account_strategy_service import resolve_account_runtime_plan
 from vendor.ai_goofish_monitor.rotation import load_state_files
@@ -24,7 +25,7 @@ class LoginStateService:
         self.state_dir = state_dir
         self.root_state_file = root_state_file
 
-    def list_state_files(self) -> list[StateFileSummary]:
+    def list_state_files(self) -> List[StateFileSummary]:
         self.state_dir.mkdir(parents=True, exist_ok=True)
         files = [Path(path) for path in load_state_files(str(self.state_dir))]
         if self.root_state_file.exists() and self.root_state_file.parent == self.state_dir:
@@ -63,6 +64,24 @@ class LoginStateService:
             has_root_state_file=self.root_state_file.exists(),
             available_account_files=pool_files,
         )
+
+    def resolve_state_file(self, strategy: Optional[str], account_state_file: Optional[str]) -> Path:
+        plan = self.resolve_runtime_plan(strategy, account_state_file)
+        forced_account = plan.get("forced_account")
+        if forced_account:
+            target = Path(forced_account)
+            if not target.is_absolute():
+                target = self.state_dir / forced_account
+            if not target.exists():
+                raise ValueError("requested state file does not exist")
+            return target
+        if plan.get("prefer_root_state") and self.root_state_file.exists():
+            return self.root_state_file
+        if plan.get("use_account_pool"):
+            pool = [Path(item.path) for item in self.list_state_files() if not item.is_root]
+            if pool:
+                return random.choice(pool)
+        raise ValueError("no available login state file")
 
     def _resolve_target(self, file_name: Optional[str]) -> Path:
         if file_name is None or not file_name.strip():

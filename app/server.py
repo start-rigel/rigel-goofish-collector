@@ -10,6 +10,8 @@ from pydantic import BaseModel
 
 from app.config import Config, load_config
 from app.services.login_state_service import LoginStateService
+from app.services.search_service import LoginRequiredError, RiskControlError, SearchService
+from app.services.summary_service import summarize_prices
 
 
 class LoginStateUpsertRequest(BaseModel):
@@ -22,9 +24,26 @@ class RuntimePlanRequest(BaseModel):
     account_state_file: Optional[str] = None
 
 
-def create_app(cfg: Optional[Config] = None) -> FastAPI:
+class SearchRequest(BaseModel):
+    keyword: str
+    category: str = ""
+    limit: int = 10
+    strategy: Optional[str] = None
+    account_state_file: Optional[str] = None
+
+
+class MarketSummaryRequest(BaseModel):
+    keyword: str
+    category: str = ""
+    limit: int = 10
+    strategy: Optional[str] = None
+    account_state_file: Optional[str] = None
+
+
+def create_app(cfg: Optional[Config] = None, search_service: Optional[SearchService] = None) -> FastAPI:
     config = cfg or load_config()
     state_service = LoginStateService(config.state_dir, config.root_state_file)
+    collector_service = search_service or SearchService(config, state_service)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -54,16 +73,19 @@ def create_app(cfg: Optional[Config] = None) -> FastAPI:
                 "POST /api/v1/login-state",
                 "DELETE /api/v1/login-state/{file_name}",
                 "POST /api/v1/runtime-plan",
+                "POST /api/v1/search",
+                "POST /api/v1/market/summary",
             ],
             "todo": [
-                "wire vendored scraper into market summary search flow",
-                "adapt ai-goofish-monitor listing extraction into part-focused market summaries",
+                "refine part-title filtering for Goofish used-market data",
+                "persist daily used-market samples and aggregated summaries",
             ],
         }
 
     @app.get("/api/v1/state-files")
     async def list_state_files() -> dict:
-        return {"count": len(state_service.list_state_files()), "items": [asdict(item) for item in state_service.list_state_files()]}
+        items = state_service.list_state_files()
+        return {"count": len(items), "items": [asdict(item) for item in items]}
 
     @app.post("/api/v1/login-state")
     async def save_login_state(req: LoginStateUpsertRequest) -> dict:
@@ -86,6 +108,41 @@ def create_app(cfg: Optional[Config] = None) -> FastAPI:
     @app.post("/api/v1/runtime-plan")
     async def runtime_plan(req: RuntimePlanRequest) -> dict:
         return state_service.resolve_runtime_plan(req.strategy, req.account_state_file)
+
+    @app.post("/api/v1/search")
+    async def search(req: SearchRequest) -> dict:
+        try:
+            return await collector_service.search(req.keyword, req.category, req.limit, req.strategy, req.account_state_file)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except LoginRequiredError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        except RiskControlError as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    @app.post("/api/v1/market/summary")
+    async def market_summary(req: MarketSummaryRequest) -> dict:
+        try:
+            search_result = await collector_service.search(req.keyword, req.category, req.limit, req.strategy, req.account_state_file)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except LoginRequiredError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        except RiskControlError as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        summary = summarize_prices(req.keyword, req.category, search_result.get("products", []))
+        return {
+            "keyword": req.keyword,
+            "category": req.category,
+            "state_file": search_result.get("state_file"),
+            "products": search_result.get("products", []),
+            "summary": summary,
+        }
 
     return app
 

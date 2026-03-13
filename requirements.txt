@@ -3,3 +3,4 @@ uvicorn[standard]
 aiofiles
 playwright
 python-dotenv
+httpx

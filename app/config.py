@@ -13,6 +13,9 @@ class Config:
     state_dir: Path
     root_state_file: Path
     upstream_enabled: bool
+    run_headless: bool
+    search_timeout_ms: int
+    browser_channel: str
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -37,4 +40,7 @@ def load_config() -> Config:
         state_dir=state_dir,
         root_state_file=root_state_file,
         upstream_enabled=_bool_env("RIGEL_GOOFISH_UPSTREAM_ENABLED", True),
+        run_headless=_bool_env("RIGEL_GOOFISH_HEADLESS", True),
+        search_timeout_ms=int(os.getenv("RIGEL_GOOFISH_SEARCH_TIMEOUT_MS", "45000")),
+        browser_channel=os.getenv("RIGEL_GOOFISH_BROWSER_CHANNEL", "chromium"),
     )
