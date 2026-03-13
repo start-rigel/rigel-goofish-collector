@@ -25,6 +25,10 @@ class RuntimePlanRequest(BaseModel):
     account_state_file: Optional[str] = None
 
 
+class PromoteLoginStateRequest(BaseModel):
+    file_name: str
+
+
 class SearchRequest(BaseModel):
     keyword: str
     category: str = ""
@@ -41,6 +45,11 @@ class MarketSummaryRequest(BaseModel):
     strategy: Optional[str] = None
     account_state_file: Optional[str] = None
     persist: bool = False
+
+
+class ValidateStateRequest(BaseModel):
+    strategy: Optional[str] = None
+    account_state_file: Optional[str] = None
 
 
 def create_app(
@@ -80,8 +89,10 @@ def create_app(
                 "GET /healthz",
                 "GET /api/v1/state-files",
                 "POST /api/v1/login-state",
+                "POST /api/v1/login-state/default",
                 "DELETE /api/v1/login-state/{file_name}",
                 "POST /api/v1/runtime-plan",
+                "POST /api/v1/validate-state",
                 "POST /api/v1/search",
                 "POST /api/v1/market/summary",
             ],
@@ -104,6 +115,14 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"message": "login state saved", "item": asdict(saved)}
 
+    @app.post("/api/v1/login-state/default")
+    async def promote_login_state(req: PromoteLoginStateRequest) -> dict:
+        try:
+            saved = state_service.promote_to_root(req.file_name)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"message": "default login state updated", "item": asdict(saved)}
+
     @app.delete("/api/v1/login-state/{file_name}")
     async def delete_login_state(file_name: str) -> dict:
         try:
@@ -117,6 +136,19 @@ def create_app(
     @app.post("/api/v1/runtime-plan")
     async def runtime_plan(req: RuntimePlanRequest) -> dict:
         return state_service.resolve_runtime_plan(req.strategy, req.account_state_file)
+
+    @app.post("/api/v1/validate-state")
+    async def validate_state(req: ValidateStateRequest) -> dict:
+        try:
+            return await collector_service.validate_state(req.strategy, req.account_state_file)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except LoginRequiredError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        except RiskControlError as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @app.post("/api/v1/search")
     async def search(req: SearchRequest) -> dict:

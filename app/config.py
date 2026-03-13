@@ -18,6 +18,7 @@ class Config:
     search_timeout_ms: int
     browser_channel: str
     postgres_dsn: Optional[str]
+    validation_keyword: str
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -47,4 +48,5 @@ def load_config() -> Config:
         search_timeout_ms=int(os.getenv("RIGEL_GOOFISH_SEARCH_TIMEOUT_MS", "45000")),
         browser_channel=os.getenv("RIGEL_GOOFISH_BROWSER_CHANNEL", "chromium"),
         postgres_dsn=postgres_dsn,
+        validation_keyword=os.getenv("RIGEL_GOOFISH_VALIDATION_KEYWORD", "电脑 内存"),
     )

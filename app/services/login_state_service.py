@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import random
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -54,6 +55,19 @@ class LoginStateService:
             return False
         target.unlink()
         return True
+
+    def promote_to_root(self, file_name: str) -> StateFileSummary:
+        source = self._resolve_target(file_name)
+        if not source.exists():
+            raise ValueError("state file does not exist")
+        self.root_state_file.parent.mkdir(parents=True, exist_ok=True)
+        if source.resolve() != self.root_state_file.resolve():
+            shutil.copyfile(source, self.root_state_file)
+        return StateFileSummary(
+            name=self.root_state_file.name,
+            path=str(self.root_state_file),
+            is_root=True,
+        )
 
     def resolve_runtime_plan(self, strategy: Optional[str], account_state_file: Optional[str]) -> dict:
         summaries = self.list_state_files()

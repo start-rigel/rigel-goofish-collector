@@ -24,7 +24,9 @@ Adapter foundation with upstream login-state preserved, plus a first Rigel-facin
 - preserved upstream `LICENSE`
 - FastAPI skeleton for Rigel
 - login-state file management API
+- default root-state promotion API
 - runtime account-selection plan API based on upstream rotation logic
+- login-state validation API for quick real-session checks
 - `POST /api/v1/search` for used-market sample collection
 - `POST /api/v1/market/summary` for immediate price aggregation over current samples
 - optional PostgreSQL persistence into `products`, `price_snapshots`, and `jobs`
@@ -34,8 +36,10 @@ Adapter foundation with upstream login-state preserved, plus a first Rigel-facin
 - `GET /healthz`
 - `GET /api/v1/state-files`
 - `POST /api/v1/login-state`
+- `POST /api/v1/login-state/default`
 - `DELETE /api/v1/login-state/{file_name}`
 - `POST /api/v1/runtime-plan`
+- `POST /api/v1/validate-state`
 - `POST /api/v1/search`
 - `POST /api/v1/market/summary`
 
@@ -57,6 +61,7 @@ python3 main.py
 - `RIGEL_GOOFISH_HEADLESS=true`
 - `RIGEL_GOOFISH_SEARCH_TIMEOUT_MS=45000`
 - `RIGEL_GOOFISH_BROWSER_CHANNEL=chromium`
+- `RIGEL_GOOFISH_VALIDATION_KEYWORD=电脑 内存`
 - `RIGEL_POSTGRES_DSN=...` enables persistence
 
 ## Example Requests
@@ -65,6 +70,12 @@ python3 main.py
 curl -X POST http://localhost:18085/api/v1/search \
   -H 'Content-Type: application/json' \
   -d '{"keyword":"DDR5 6000 32G","category":"RAM","limit":10}'
+```
+
+```bash
+curl -X POST http://localhost:18085/api/v1/validate-state \
+  -H 'Content-Type: application/json' \
+  -d '{"account_state_file":"acc_1.json"}'
 ```
 
 ```bash

@@ -42,6 +42,17 @@ class SearchService:
         result["state_file"] = state_file.name
         return result
 
+    async def validate_state(self, strategy: Optional[str], account_state_file: Optional[str]) -> Dict[str, Any]:
+        state_file = self.state_service.resolve_state_file(strategy, account_state_file)
+        result = await self._search_with_state(self.cfg.validation_keyword, "", 1, state_file)
+        return {
+            "valid": True,
+            "state_file": state_file.name,
+            "keyword": self.cfg.validation_keyword,
+            "sample_count": result.get("sample_count", 0),
+            "page_url": result.get("page_url"),
+        }
+
     async def _search_with_state(self, keyword: str, category: str, limit: int, state_file) -> Dict[str, Any]:
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(

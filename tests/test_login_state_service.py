@@ -34,6 +34,18 @@ class LoginStateServiceTest(unittest.TestCase):
             self.assertEqual(plan["strategy"], "auto")
             self.assertTrue(plan["prefer_root_state"])
 
+    def test_promote_state_to_root(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_dir = Path(tmpdir) / "state"
+            root_state = state_dir / "goofish_state.json"
+            service = LoginStateService(state_dir, root_state)
+            service.save_state('{"cookies": [1]}', "acc_1.json")
+
+            saved = service.promote_to_root("acc_1.json")
+            self.assertTrue(saved.is_root)
+            self.assertEqual(saved.name, "goofish_state.json")
+            self.assertEqual(root_state.read_text(encoding="utf-8"), '{"cookies": [1]}')
+
 
 if __name__ == "__main__":
     unittest.main()
