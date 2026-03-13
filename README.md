@@ -31,6 +31,7 @@ Adapter foundation with upstream login-state preserved, plus a first Rigel-facin
 - `POST /api/v1/market/summary` for immediate price aggregation over current samples
 - optional PostgreSQL persistence into `products`, `price_snapshots`, and `jobs`
 - conservative invalid-title filtering for obvious wanted posts, whole-PC listings, broken parts, and CPU/MB bundles
+- search responses now expose `raw_result_count`, `filtered_count`, and `filter_stats` so we can see how much noise was removed
 
 ## Routes
 

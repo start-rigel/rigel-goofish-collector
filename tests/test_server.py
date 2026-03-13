@@ -18,9 +18,12 @@ class StubSearchService:
             "category": category,
             "limit": limit,
             "state_file": "acc_1.json",
+            "raw_result_count": 3,
+            "filtered_count": 1,
+            "filter_stats": {"wanted_post": 1},
             "products": [
-                {"title": "光威 DDR5 6000 32G", "price": 2000.0},
-                {"title": "金士顿 DDR5 6000 32G", "price": 2500.0},
+                {"title": "光威 DDR5 6000 32G", "price": 2000.0, "source_platform": "xianyu"},
+                {"title": "金士顿 DDR5 6000 32G", "price": 2500.0, "source_platform": "xianyu"},
             ],
             "sample_count": 2,
         }
@@ -69,6 +72,8 @@ class ServerTest(unittest.TestCase):
             response = client.post("/api/v1/search", json={"keyword": "DDR5 6000 32G", "category": "RAM"})
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["sample_count"], 2)
+            self.assertEqual(response.json()["filtered_count"], 1)
+            self.assertEqual(response.json()["filter_stats"]["wanted_post"], 1)
             self.assertFalse(response.json()["persisted"])
 
     def test_market_summary_endpoint(self):

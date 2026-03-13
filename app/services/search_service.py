@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional
+from collections import Counter
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode
 
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -78,13 +79,16 @@ class SearchService:
                 await self._check_risk(page)
                 response = await response_info.value
                 payload = await response.json()
-                items = self._parse_search_payload(payload, keyword, category, limit)
+                items, filter_stats, raw_result_count = self._parse_search_payload(payload, keyword, category, limit)
                 return {
                     "keyword": keyword,
                     "category": category,
                     "limit": limit,
                     "page_url": page.url,
                     "products": items,
+                    "raw_result_count": raw_result_count,
+                    "filtered_count": raw_result_count - len(items),
+                    "filter_stats": filter_stats,
                     "sample_count": len(items),
                 }
             finally:
@@ -103,34 +107,38 @@ class SearchService:
         lowered = (url or "").lower()
         return any(marker in lowered for marker in LOGIN_MARKERS)
 
-    def _parse_search_payload(self, payload: Dict[str, Any], keyword: str, category: str, limit: int) -> List[Dict[str, Any]]:
+    def _parse_search_payload(self, payload: Dict[str, Any], keyword: str, category: str, limit: int) -> Tuple[List[Dict[str, Any]], Dict[str, int], int]:
         items = (((payload or {}).get("data") or {}).get("resultList") or [])
         parsed: List[Dict[str, Any]] = []
+        filter_stats: Counter[str] = Counter()
         for raw in items:
-            parsed_item = self._parse_item(raw, keyword, category)
+            parsed_item = self._parse_item(raw, keyword, category, filter_stats)
             if parsed_item is None:
                 continue
             parsed.append(parsed_item)
             if len(parsed) >= limit:
                 break
-        return parsed
+        return parsed, dict(filter_stats), len(items)
 
-    def _parse_item(self, raw: Dict[str, Any], keyword: str, category: str) -> Optional[Dict[str, Any]]:
+    def _parse_item(self, raw: Dict[str, Any], keyword: str, category: str, filter_stats: Counter[str]) -> Optional[Dict[str, Any]]:
         item = (((raw or {}).get("data") or {}).get("item") or {})
         main = ((((item.get("main") or {}).get("exContent")) or {}))
         click_args = ((((item.get("main") or {}).get("clickParam") or {}).get("args")) or {})
         title = str(main.get("title") or "").strip()
         if not title:
+            filter_stats["empty_title"] += 1
             return None
         reject = reject_reason(title, category)
         if reject is not None:
+            filter_stats[reject] += 1
             return None
         price = self._parse_price(main.get("price"))
         if price is None:
+            filter_stats["invalid_price"] += 1
             return None
         target_url = str(((item.get("main") or {}).get("targetUrl")) or "").replace("fleamarket://", "https://www.goofish.com/")
         return {
-            "source_platform": "goofish",
+            "source_platform": "xianyu",
             "keyword": keyword,
             "category": category,
             "item_id": str(main.get("itemId") or ""),
